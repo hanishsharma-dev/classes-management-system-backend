@@ -70,9 +70,14 @@ app.post('/register', async (req, res) => {
         const newUser = new User({ email, fullName, password: hashedPassword });
         await newUser.save();
 
-        res.status(201).json(newUser);  // Return the created user
+        // Exclude sensitive information (like the password) from the response
+        res.status(201).json({
+            _id: newUser._id,
+            email: newUser.email,
+            fullName: newUser.fullName,
+        });
     } catch (err) {
-        res.status(400).json({ error: err.message });  // Handle errors
+        res.status(400).json({ error: err.message });
     }
 });
 
@@ -84,21 +89,35 @@ app.post('/login', async (req, res) => {
         // Find the user by email
         const user = await User.findOne({ email });
         if (!user) {
-            return res.status(400).json({ message: 'Invalid credentials' });
+            return res.status(401).json({ message: 'Invalid credentials' });  // Unauthorized error for invalid credentials
         }
 
         // Compare the provided password with the hashed password
         const isMatch = await bcrypt.compare(password, user.password);
         if (!isMatch) {
-            return res.status(400).json({ message: 'Invalid credentials' });
+            return res.status(401).json({ message: 'Invalid credentials' });  // Consistent error response for invalid credentials
         }
 
         // Generate a JWT token for the authenticated user
-        const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, { expiresIn: '8h' });
+        const token = jwt.sign(
+            { userId: user._id }, 
+            process.env.JWT_SECRET, 
+            { expiresIn: '8h' }  // Token expiration time
+        );
 
-        res.status(200).json({ token, user: { id: user._id, email: user.email, fullName: user.fullName } });
+        // Respond with the token and user info (excluding password)
+        res.status(200).json({
+            token, 
+            user: { 
+                id: user._id, 
+                email: user.email, 
+                fullName: user.fullName 
+            }
+        });
     } catch (err) {
-        res.status(500).json({ error: err.message });  // Handle errors
+        // Log the error for internal debugging and respond with a generic message
+        console.error('Login Error:', err.message);
+        res.status(500).json({ message: 'Server error. Please try again later.' });  // Return a generic error message for server issues
     }
 });
 
